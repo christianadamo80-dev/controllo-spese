@@ -36,6 +36,7 @@ const els = {
   importFile: document.getElementById('importFile'),
   resetBtn: document.getElementById('resetBtn'),
   expenseItemTemplate: document.getElementById('expenseItemTemplate'),
+  monthlyProjectionList: document.getElementById('monthlyProjectionList'),
   certainDescription: document.getElementById('certainDescription'),
   certainAmount: document.getElementById('certainAmount'),
   certainFrequency: document.getElementById('certainFrequency'),
@@ -230,10 +231,82 @@ function renderFutureExpenses() {
     });
 }
 
+function renderMonthlyProjection() {
+  const container = els.monthlyProjectionList;
+  if (!container) return;
+  container.innerHTML = '';
+
+  const initialBalance = Number(state.currentBalance || 0);
+  const timeline = {};
+
+  state.certainExpenses.forEach(item => {
+    if (!item.date) return;
+    const key = item.date.substring(0, 7);
+    if (!timeline[key]) timeline[key] = { expenses: 0, incomes: 0 };
+    timeline[key].expenses += Number(item.amount || 0);
+  });
+
+  state.futureExpenses.forEach(item => {
+    if (!item.date || !item.enabled) return;
+    const key = item.date.substring(0, 7);
+    if (!timeline[key]) timeline[key] = { expenses: 0, incomes: 0 };
+    
+    if (item.type === 'income') {
+      timeline[key].incomes += Number(item.amount || 0);
+    } else {
+      timeline[key].expenses += Number(item.amount || 0);
+    }
+  });
+
+  const months = Object.keys(timeline).sort();
+  if (months.length === 0) {
+    container.innerHTML = '<div class="empty-state">Assegna una data ai movimenti per vedere la proiezione mensile.</div>';
+    return;
+  }
+
+  let runningBalance = initialBalance;
+
+  months.forEach(monthKey => {
+    const [year, month] = monthKey.split('-');
+    const formattedMonth = `${month}/${year}`;
+    
+    const data = timeline[monthKey];
+    const netImpact = data.incomes - data.expenses;
+    runningBalance += netImpact;
+
+    let balanceColor = 'var(--text)';
+    if (runningBalance < 0) balanceColor = 'var(--danger)';
+    else if (runningBalance < Number(state.safetyThreshold || 0)) balanceColor = 'var(--warning)';
+
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.style.padding = '12px 16px';
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.alignItems = 'center';
+    
+    row.innerHTML = `
+      <div class="list-main">
+        <h3 class="item-title" style="margin:0; font-size:1.1rem;">${formattedMonth}</h3>
+        <div class="meta-row" style="margin-top: 4px; display: flex; gap: 8px;">
+          <span class="meta-pill" style="color: var(--success); background: #e7f6ed; padding: 2px 8px; border-radius: 999px; font-size: 0.85rem;">+ ${formatCurrency(data.incomes)}</span>
+          <span class="meta-pill" style="color: var(--danger); background: #fdeceb; padding: 2px 8px; border-radius: 999px; font-size: 0.85rem;">- ${formatCurrency(data.expenses)}</span>
+        </div>
+      </div>
+      <div class="list-side" style="text-align: right;">
+        <span style="font-size: 0.85rem; color: var(--muted); display:block;">Saldo stimato</span>
+        <strong style="font-size: 1.2rem; color: ${balanceColor};">${formatCurrency(runningBalance)}</strong>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
 function renderAll() {
   renderCertainExpenses();
   renderFutureExpenses();
   updateSummary();
+  renderMonthlyProjection();
   saveState();
 }
 
@@ -243,7 +316,6 @@ function openCertainForm(editing = false) {
     els.certainForm.reset();
   }
   els.certainForm.classList.remove('hidden');
-  els.certainDescription.focus();
 }
 
 function closeCertainForm() {
@@ -261,15 +333,11 @@ function openFutureForm(editing = false) {
     els.futureEnabled.checked = true;
   }
   els.futureForm.classList.remove('hidden');
-  els.futureDescription.focus();
 }
 
 function closeFutureForm() {
   state.editingFutureId = null;
   els.futureForm.reset();
-  els.futureType.value = 'expense';
-  els.futurePriority.value = 'Media';
-  els.futureEnabled.checked = true;
   els.futureForm.classList.add('hidden');
 }
 
@@ -322,15 +390,12 @@ function handleCertainSubmit(event) {
     frequency: els.certainFrequency.value,
     date: els.certainDate.value,
   };
-
   if (!payload.description || payload.amount <= 0) return;
-
   if (state.editingCertainId) {
     state.certainExpenses = state.certainExpenses.map(exp => exp.id === state.editingCertainId ? payload : exp);
   } else {
     state.certainExpenses.push(payload);
   }
-
   closeCertainForm();
   renderAll();
 }
@@ -347,15 +412,12 @@ function handleFutureSubmit(event) {
     priority: els.futurePriority.value,
     enabled: els.futureEnabled.checked,
   };
-
   if (!payload.description || payload.amount <= 0) return;
-
   if (state.editingFutureId) {
     state.futureExpenses = state.futureExpenses.map(exp => exp.id === state.editingFutureId ? payload : exp);
   } else {
     state.futureExpenses.push(payload);
   }
-
   closeFutureForm();
   renderAll();
 }
@@ -423,12 +485,10 @@ function bindEvents() {
     state.currentBalance = Number(e.target.value || 0);
     renderAll();
   });
-
   els.safetyThreshold.addEventListener('input', e => {
     state.safetyThreshold = Number(e.target.value || 0);
     renderAll();
   });
-
   els.addCertainExpense.addEventListener('click', () => openCertainForm(false));
   els.addFutureExpense.addEventListener('click', () => openFutureForm(false));
   els.cancelCertainBtn.addEventListener('click', closeCertainForm);
