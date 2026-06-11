@@ -197,7 +197,15 @@ function renderCertainExpenses() {
       metaRow.appendChild(createMetaPill(item.frequency || 'Una tantum'));
       if (item.date) metaRow.appendChild(createMetaPill(`Data: ${formatDate(item.date)}`));
       clone.querySelector('.item-amount').textContent = `- ${formatCurrency(item.amount)}`;
+      
       const actions = clone.querySelector('.item-actions');
+      // Forziamo uno stile in linea temporaneo per accertarci che l'elemento .list-side del CSS originale non nasconda i bottoni
+      const sideContainer = clone.querySelector('.list-side');
+      if (sideContainer) {
+         sideContainer.style.minWidth = '240px';
+      }
+      
+      actions.appendChild(createActionButton('Duplica', 'btn-secondary', () => duplicateCertain(item.id)));
       actions.appendChild(createActionButton('Modifica', 'btn-secondary', () => editCertain(item.id)));
       actions.appendChild(createActionButton('Elimina', 'btn-danger', () => deleteCertain(item.id)));
       els.certainList.appendChild(clone);
@@ -350,6 +358,18 @@ function editCertain(id) {
   els.certainFrequency.value = item.frequency || 'Una tantum';
   els.certainDate.value = item.date || '';
   openCertainForm(true);
+}
+
+function duplicateCertain(id) {
+  const item = state.certainExpenses.find(exp => exp.id === id);
+  if (!item) return;
+  state.editingCertainId = null; // Garantisce che salverà una NUOVA spesa e non sovrascriverà la vecchia
+  els.certainDescription.value = item.description || '';
+  els.certainAmount.value = item.amount || '';
+  els.certainFrequency.value = item.frequency || 'Una tantum';
+  els.certainDate.value = item.date || '';
+  els.certainForm.classList.remove('hidden');
+  els.certainDate.focus();
 }
 
 function editFuture(id) {
